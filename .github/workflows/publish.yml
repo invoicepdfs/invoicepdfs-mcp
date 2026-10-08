@@ -122,10 +122,40 @@ jobs:
 
       - run: npm run build
 
+      # A release is two publishes and only the first is irreversible, so this
+      # one is a no-op when the version is already up. v0.1.1 published to npm
+      # and then failed registering, and without this the only way to finish it
+      # was a version bump users would have had no reason for.
+      #
       # --provenance is implied by trusted publishing; stated anyway, so that a
       # release without an attestation fails here rather than shipping quietly.
       - name: Publish to npm
-        run: npm publish --provenance --access public
+        run: |
+          NAME="$(node -p 'require("./package.json").name')"
+          VER="$(node -p 'require("./package.json").version')"
+          if npm view "$NAME@$VER" version >/dev/null 2>&1; then
+            echo "$NAME@$VER is already on npm — skipping publish, continuing to the registry."
+          else
+            npm publish --provenance --access public
+          fi
+
+      # npm answers "your package is being processed and may take a few minutes
+      # to become available", and the MCP Registry refuses to register a version
+      # it cannot fetch. v0.1.1 failed exactly here, two seconds after a
+      # successful publish; the version appeared about forty seconds later.
+      - name: Wait for npm to serve this version
+        run: |
+          URL="https://registry.npmjs.org/$(node -p 'encodeURIComponent(require("./package.json").name)')/$(node -p 'require("./package.json").version')"
+          for i in $(seq 1 30); do
+            if curl -fsS "$URL" >/dev/null 2>&1; then
+              echo "npm is serving it after ~$((i * 10))s."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::npm has not served this version after five minutes." \
+               "The package is published; re-run this job to finish registering it."
+          exit 1
 
       - name: Install mcp-publisher
         run: |
