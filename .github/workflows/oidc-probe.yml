@@ -1,0 +1,17 @@
+name: OIDC probe
+on: workflow_dispatch
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Is an OIDC identity available to this job?
+        run: |
+          if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+            echo "PROBE: OIDC request URL IS present"
+          else
+            echo "PROBE: OIDC request URL IS ABSENT"
+          fi
+          echo "PROBE: token var set: ${ACTIONS_ID_TOKEN_REQUEST_TOKEN:+yes}${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-no}"
