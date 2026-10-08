@@ -1,6 +1,6 @@
 {
   "name": "@invoicepdfs/mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "mcpName": "io.github.invoicepdfs/mcp",
   "description": "MCP server for the InvoicePDFs API",
   "homepage": "https://invoicepdfs.com/docs/guides/mcp/",
