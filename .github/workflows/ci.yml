@@ -1,0 +1,45 @@
+name: CI
+
+# Runs in the published mirror (invoicepdfs/invoicepdfs-mcp), not here. This
+# file lives under mcp/ so it is reviewed in the monorepo with the code it
+# tests, and reaches .github/workflows/ in the mirror because the mirror's
+# contents are mcp/'s contents. GitHub only reads workflows from the repository
+# root, so it is inert in this repo.
+#
+# The drift guard that matters is in the monorepo's .github/workflows/mcp.yml,
+# which runs these same tests on every app/ change — a renamed handler has to
+# fail in the pull request that renames it, which is a thing only the monorepo
+# can see. This job covers the mirror's own health.
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm test
+
+      - run: npm run build
+
+      # The spec ships inside the package, so a pack that silently omits it
+      # would install a server that starts and advertises nothing.
+      - name: The packed tarball carries the spec
+        run: |
+          npm pack --silent > /dev/null
+          tar tzf invoicepdfs-mcp-*.tgz | grep -qx 'package/openapi.json'
+          echo "openapi.json is in the tarball."

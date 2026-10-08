@@ -1,0 +1,88 @@
+name: Publish
+
+# Runs in the published mirror, on a v* tag. Two publishes, in order: the npm
+# package, then the MCP Registry entry that points at it. The registry only
+# stores metadata, so it has to come second — it validates that the package it
+# names is really on npm.
+#
+# Both the provenance attestation and the registry's OIDC login need
+# `id-token: write`, which is also why the mirror is public: provenance is not
+# available to a private repository, and a private repo gives the registry and
+# the client directories no source to link to.
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          registry-url: "https://registry.npmjs.org"
+
+      - run: npm ci
+
+      # The tag is the release, but package.json's version is what npm
+      # publishes and server.json's is what the registry records. Asserted
+      # rather than patched from the tag: patching would publish a version the
+      # committed files disagree with, and the mirror is generated from the
+      # monorepo, so the fix belongs in mcp/package.json upstream.
+      - name: Tag, package.json and server.json agree
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          PKG="$(node -p 'require("./package.json").version')"
+          SRV="$(node -p 'require("./server.json").version')"
+          SRV_PKG="$(node -p 'require("./server.json").packages[0].version')"
+          echo "tag=$TAG package.json=$PKG server.json=$SRV server.json/packages=$SRV_PKG"
+          for actual in "$PKG" "$SRV" "$SRV_PKG"; do
+            if [ "$actual" != "$TAG" ]; then
+              echo "::error::version mismatch — tag v$TAG, but a file says $actual." \
+                   "Bump mcp/package.json and mcp/server.json in the monorepo, let the" \
+                   "mirror sync, then tag."
+              exit 1
+            fi
+          done
+
+      # mcpName is what lets the registry verify this package is the one
+      # server.json claims, so a mismatch has to stop the release, not be
+      # discovered by the registry rejecting it afterwards.
+      - name: package.json mcpName matches server.json name
+        run: |
+          test "$(node -p 'require("./package.json").mcpName')" \
+             = "$(node -p 'require("./server.json").name')"
+
+      - run: npm run typecheck
+
+      - run: npm test
+
+      - run: npm run build
+
+      - name: Publish to npm
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Install mcp-publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+
+      # GitHub OIDC, so the only secret this workflow needs is NPM_TOKEN. It
+      # authorises the io.github.invoicepdfs/* namespace, which is why
+      # server.json is named that way rather than com.invoicepdfs/* — the
+      # custom-domain form needs a DNS TXT record and an Ed25519 key in a
+      # secret.
+      - name: Authenticate to the MCP Registry
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish to the MCP Registry
+        run: ./mcp-publisher publish

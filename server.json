@@ -1,0 +1,37 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.invoicepdfs/mcp",
+  "description": "Render invoices, credit notes and quotes as PDFs, check them against EN 16931 e-invoicing rules, and reach the rest of the InvoicePDFs API on demand.",
+  "repository": {
+    "url": "https://github.com/invoicepdfs/invoicepdfs-mcp",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "@invoicepdfs/mcp",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "INVOICEPDFS_API_KEY",
+          "description": "An InvoicePDFs API key, created at https://invoicepdfs.com. Not scoped: it can do anything the account can.",
+          "isRequired": true,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "INVOICEPDFS_BASE_URL",
+          "description": "Override the API host. Only needed when pointing at a local server.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}
