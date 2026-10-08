@@ -5,6 +5,17 @@ name: Publish
 # stores metadata, so it has to come second — it validates that the package it
 # names is really on npm.
 #
+# This job holds no credential. It publishes over OIDC, through the trusted
+# publisher configured on npmjs.com for this repository and this filename — so
+# renaming this file, or moving the job to another repository, breaks publishing
+# until the trusted publisher is updated to match.
+#
+# v0.1.0 went out with an NPM_TOKEN because npm cannot configure a trusted
+# publisher for a package that does not exist yet (npm/cli#8544). That token has
+# been revoked and the secret deleted; nothing here should reintroduce one. npm
+# is restricting tokens that bypass 2FA anyway — account changes Aug 2026,
+# direct publishing Jan 2027.
+#
 # Both the provenance attestation and the registry's OIDC login need
 # `id-token: write`, which is also why the mirror is public: provenance is not
 # available to a private repository, and a private repo gives the registry and
@@ -38,11 +49,24 @@ jobs:
             exit 1
           fi
 
+      # Deliberately no `registry-url`. It writes
+      # //registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN} into .npmrc, which
+      # with no token expands to an empty value — npm reads that as "auth is
+      # configured", never runs the OIDC exchange, and fails ENEEDAUTH.
+      # actions/setup-node#1551, npm/documentation#1960. The default registry is
+      # registry.npmjs.org regardless, so nothing is lost.
       - uses: actions/setup-node@v5
         with:
           node-version: "22"
           cache: npm
-          registry-url: "https://registry.npmjs.org"
+
+      # Node 22 bundles npm 10.9.x, and trusted publishing needs >= 11.5.1. Done
+      # now rather than at the switchover, so the move off the token is a change
+      # of setting on npmjs.com and nothing here.
+      - name: npm new enough to publish without a token
+        run: |
+          npm install -g npm@latest
+          npm -v
 
       - run: npm ci
 
@@ -75,26 +99,43 @@ jobs:
           test "$(node -p 'require("./package.json").mcpName')" \
              = "$(node -p 'require("./server.json").name')"
 
+      # The registry validates server.json at the end of this job, after
+      # `npm publish` has happened and cannot be taken back. v0.1.0 went to npm
+      # and then failed here on a description 49 characters over the limit,
+      # leaving the package published and unlisted. Validating first turns that
+      # into a failed job instead of a half-finished release.
+      #
+      # The schema URL comes out of server.json rather than being written here,
+      # so the two cannot drift. --strict=false because the schema uses
+      # `example`, which is not a draft-07 keyword and makes ajv refuse the
+      # schema itself.
+      - name: server.json satisfies the registry schema
+        run: |
+          curl -sSLf -o /tmp/server.schema.json \
+            "$(node -p 'require("./server.json")["$schema"]')"
+          npx --yes ajv-cli@5 validate --spec=draft7 --strict=false \
+            -s /tmp/server.schema.json -d server.json
+
       - run: npm run typecheck
 
       - run: npm test
 
       - run: npm run build
 
+      # --provenance is implied by trusted publishing; stated anyway, so that a
+      # release without an attestation fails here rather than shipping quietly.
       - name: Publish to npm
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Install mcp-publisher
         run: |
           curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
 
-      # GitHub OIDC, so the only secret this workflow needs is NPM_TOKEN. It
-      # authorises the io.github.invoicepdfs/* namespace, which is why
+      # GitHub OIDC again, the same id-token this job publishes to npm with.
+      # It authorises the io.github.invoicepdfs/* namespace, which is why
       # server.json is named that way rather than com.invoicepdfs/* — the
       # custom-domain form needs a DNS TXT record and an Ed25519 key in a
-      # secret.
+      # secret, and this workflow now keeps no secrets at all.
       - name: Authenticate to the MCP Registry
         run: ./mcp-publisher login github-oidc
 
