@@ -1,0 +1,158 @@
+{
+  "$comment": "Which operations are promoted to first-class tools, and what they are called. Read by both servers \u2014 mcp/src/manifest.ts (the local stdio server) and app/mcp/ (the hosted one) \u2014 because curation is a product decision and two copies of it would drift. Everything else about a tool (input schema, description, the HTTP call) is generated from the OpenAPI spec. Not all 161 operations: every client caps the tool list \u2014 Cursor around 40, Junie 100, Copilot 128 \u2014 so a small promoted set covers the common path and find_operation reaches the rest on demand.",
+  "groups": {
+    "rendering": "The product.",
+    "checking": "Checking without rendering. Cheaper than a render and the right first move for an agent: catches a bad document before it costs a render off the account's quota.",
+    "documents": "Creating and reading documents. The lifecycle transitions are a separate tool.",
+    "e_invoicing": "The other half of the product.",
+    "prerequisites": "The things a document needs before it can exist. template_id is an input on every render with no other way to discover which values are valid.",
+    "recurring": "Schedules that issue documents on their own."
+  },
+  "promoted": [
+    {
+      "name": "document_render",
+      "operationId": "render_document",
+      "group": "rendering"
+    },
+    {
+      "name": "document_render_stored",
+      "operationId": "create_document_render",
+      "group": "rendering"
+    },
+    {
+      "name": "document_get_render",
+      "operationId": "get_render",
+      "group": "rendering"
+    },
+    {
+      "name": "document_download_render",
+      "operationId": "download_render",
+      "group": "rendering"
+    },
+    {
+      "name": "document_calculate",
+      "operationId": "calculate_document",
+      "group": "checking"
+    },
+    {
+      "name": "document_validate",
+      "operationId": "validate_document",
+      "group": "checking"
+    },
+    {
+      "name": "document_create",
+      "operationId": "create_document",
+      "group": "documents"
+    },
+    {
+      "name": "document_get",
+      "operationId": "get_document",
+      "group": "documents"
+    },
+    {
+      "name": "document_list",
+      "operationId": "list_documents",
+      "group": "documents"
+    },
+    {
+      "name": "document_update",
+      "operationId": "update_document",
+      "group": "documents"
+    },
+    {
+      "name": "document_duplicate",
+      "operationId": "duplicate_document",
+      "group": "documents"
+    },
+    {
+      "name": "document_send",
+      "operationId": "send_document",
+      "group": "documents"
+    },
+    {
+      "name": "compliance_check",
+      "operationId": "validate_compliance",
+      "group": "e_invoicing"
+    },
+    {
+      "name": "compliance_xml",
+      "operationId": "render_document_xml",
+      "group": "e_invoicing"
+    },
+    {
+      "name": "customer_list",
+      "operationId": "list_customers",
+      "group": "prerequisites"
+    },
+    {
+      "name": "customer_create",
+      "operationId": "create_customer",
+      "group": "prerequisites"
+    },
+    {
+      "name": "customer_get",
+      "operationId": "get_customer",
+      "group": "prerequisites"
+    },
+    {
+      "name": "customer_update",
+      "operationId": "update_customer",
+      "group": "prerequisites"
+    },
+    {
+      "name": "business_profile_list",
+      "operationId": "list_business_profiles",
+      "group": "prerequisites"
+    },
+    {
+      "name": "business_profile_create",
+      "operationId": "create_business_profile",
+      "group": "prerequisites"
+    },
+    {
+      "name": "template_list",
+      "operationId": "list_templates",
+      "group": "prerequisites"
+    },
+    {
+      "name": "recurring_create",
+      "operationId": "create_recurring_invoice",
+      "group": "recurring"
+    },
+    {
+      "name": "recurring_list",
+      "operationId": "list_recurring_invoices",
+      "group": "recurring"
+    },
+    {
+      "name": "recurring_pause",
+      "operationId": "pause_recurring_invoice",
+      "group": "recurring"
+    },
+    {
+      "name": "recurring_resume",
+      "operationId": "resume_recurring_invoice",
+      "group": "recurring"
+    },
+    {
+      "name": "recurring_cancel",
+      "operationId": "cancel_recurring_invoice",
+      "group": "recurring"
+    },
+    {
+      "name": "recurring_generated",
+      "operationId": "list_generated_invoices",
+      "group": "recurring"
+    }
+  ],
+  "transitions": {
+    "finalized": "finalize_document",
+    "sent": "mark_sent",
+    "paid": "mark_paid",
+    "unpaid": "mark_unpaid",
+    "void": "void_document",
+    "archived": "archive_document",
+    "restored": "restore_document"
+  },
+  "transitions_comment": "Seven lifecycle operations presented as one tool, keyed by the state they reach. Here rather than in the tool because it is the same kind of decision as `promoted`: which operations are surfaced and what they are called. The state names are the only invention \u2014 everything a tool says about them is read from the spec."
+}

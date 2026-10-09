@@ -23,7 +23,8 @@
   },
   "files": [
     "dist",
-    "openapi.json"
+    "openapi.json",
+    "manifest.json"
   ],
   "scripts": {
     "build": "tsc",
