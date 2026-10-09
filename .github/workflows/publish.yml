@@ -116,6 +116,27 @@ jobs:
           npx --yes ajv-cli@5 validate --spec=draft7 --strict=false \
             -s /tmp/server.schema.json -d server.json
 
+      # The registry requires a remote to be publicly reachable, and will
+      # happily record one that is not — leaving a listing that sends people
+      # to a 404. The endpoint ships from a different repository than this
+      # one, so "is it deployed yet" is a real question at release time and
+      # not a rhetorical one.
+      - name: Every remote in server.json answers
+        run: |
+          node -p 'require("./server.json").remotes?.map(r => r.url).join("\n") ?? ""' \
+            | grep . | while read -r url; do
+            code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$url" \
+              -H 'Content-Type: application/json' --max-time 20 -d '{}' || echo 000)"
+            echo "$url -> $code"
+            case "$code" in
+              000|404|5??)
+                echo "::error::$url is not serving MCP (HTTP $code). Deploy it before" \
+                     "publishing a listing that points at it."
+                exit 1
+                ;;
+            esac
+          done
+
       - run: npm run typecheck
 
       - run: npm test

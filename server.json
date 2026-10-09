@@ -6,13 +6,27 @@
     "url": "https://github.com/invoicepdfs/invoicepdfs-mcp",
     "source": "github"
   },
-  "version": "0.1.1",
+  "version": "0.1.2",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://invoicepdfs.com/mcp",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Bearer <your InvoicePDFs API key>, created at https://invoicepdfs.com. Not scoped: it can do anything the account can.",
+          "isRequired": true,
+          "isSecret": true
+        }
+      ]
+    }
+  ],
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "@invoicepdfs/mcp",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "transport": {
         "type": "stdio"
       },
