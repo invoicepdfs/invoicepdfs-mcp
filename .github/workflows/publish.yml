@@ -134,6 +134,17 @@ jobs:
                      "publishing a listing that points at it."
                 exit 1
                 ;;
+              3??)
+                # v0.1.2 nearly shipped a listing for a URL that answered 307
+                # to its own trailing-slash form. That works only for clients
+                # that follow a redirect and re-POST with their headers intact,
+                # and the canonical URI in server.json has no trailing slash on
+                # purpose. The advertised URL has to answer where it is.
+                echo "::error::$url redirects (HTTP $code) rather than answering." \
+                     "Clients are not required to follow it. Serve the advertised" \
+                     "URL directly."
+                exit 1
+                ;;
             esac
           done
 
