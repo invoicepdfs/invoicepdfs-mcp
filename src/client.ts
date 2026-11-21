@@ -92,20 +92,38 @@ export class InvoicePdfsClient {
   }
 }
 
-/** The rate limit an agent is most likely to hit, made legible. */
+/**
+ * The error, shaped for a model: what happened and when retrying will work.
+ *
+ * Branches on the code, not the status: a 429 is either the per-second rate
+ * limit (retry in about a second) or the monthly quota (retry after the reset,
+ * possibly weeks away). Telling a model to "retry in a moment" on the second
+ * sends it into a loop, so the API's own message and details — which carry the
+ * reset time — always reach it.
+ */
 export function describeError(err: unknown): string {
   const apiError = (err as { apiError?: ApiError })?.apiError;
   if (!apiError) return err instanceof Error ? err.message : String(err);
 
-  if (apiError.status === 429) {
-    return (
-      "Rate limited (429). This account allows a fixed number of requests per " +
-      "second. Wait a moment and retry the same call — do not fan out further, " +
-      "and do not treat this as a failure of the request itself."
-    );
-  }
   const detail: string = apiError.details
     ? `\n\nDetails: ${JSON.stringify(apiError.details)}`
     : "";
+  // A 429 with no JSON envelope (a proxy or edge in front of the API) is a
+  // rate limit too, and still needs the don't-fan-out guidance.
+  if (
+    apiError.code === "rate_limited" ||
+    (apiError.status === 429 && apiError.code === "http_error")
+  ) {
+    // The API's own message states the exact wait; a bare 429 has none.
+    const when: string =
+      apiError.code === "rate_limited"
+        ? "Retry the same call after that wait"
+        : "Retry the same call after a short wait";
+    return (
+      `Rate limited (429): ${apiError.message.replace(/\.$/, "")}. ${when} — ` +
+      "do not fan out further, and do not treat this as a failure of the " +
+      `request itself.${detail}`
+    );
+  }
   return `${apiError.code} (HTTP ${apiError.status}): ${apiError.message}${detail}`;
 }

@@ -58,7 +58,12 @@ test("a 429 reaches the caller as guidance, not as a stack trace", async () => {
   respond = () => ({
     status: 429,
     body: JSON.stringify({
-      error: { code: "rate_limited", message: "Too many requests" },
+      error: {
+        code: "rate_limited",
+        message:
+          "Too many requests: this API key is limited to 25 requests per second. " +
+          "Retry in 0.890 seconds (at 2026-11-18T00:36:41.140Z).",
+      },
     }),
   });
 
@@ -71,6 +76,11 @@ test("a 429 reaches the caller as guidance, not as a stack trace", async () => {
   }
 
   // What a model needs in order to do the right thing next.
+  assert.ok(
+    message.includes("(at 2026-11-18T00:36:41.140Z). Retry the same call after that wait"),
+    message,
+  );
+  assert.doesNotMatch(message, /\.\./);
   assert.match(message, /429/);
   assert.match(message, /retry/i);
   assert.match(
@@ -83,6 +93,52 @@ test("a 429 reaches the caller as guidance, not as a stack trace", async () => {
     /undefined|\[object Object\]/,
     "the message must be readable prose, not a mangled object",
   );
+});
+
+test("a spent quota is not mistaken for the rate limit", async () => {
+  // Both are 429s. The quota one can mean weeks, so the model must see the
+  // API's own message — the reset time — not "retry in a moment".
+  const quotaMessage =
+    "Monthly render quota of 100,000 used. It resets at 2026-12-01T00:00:00Z " +
+    "(in 12 days, 23 hours). For a higher limit, email support@invoicepdfs.com.";
+  respond = () => ({
+    status: 429,
+    body: JSON.stringify({
+      error: {
+        code: "quota_exceeded",
+        message: quotaMessage,
+        details: { resets_at: "2026-12-01T00:00:00Z", retry_after_seconds: 1120996 },
+      },
+    }),
+  });
+
+  let message = "";
+  try {
+    await client().call(BY_ID.list_documents, { limit: 1 });
+    assert.fail("a 429 should not resolve");
+  } catch (err) {
+    message = describeError(err);
+  }
+
+  assert.ok(message.includes(quotaMessage), message);
+  assert.match(message, /retry_after_seconds/);
+  assert.doesNotMatch(message, /Wait a moment|Rate limited/);
+});
+
+test("a bare 429 from an edge still gets the rate-limit guidance", async () => {
+  respond = () => ({ status: 429, body: "Too Many Requests" });
+
+  let message = "";
+  try {
+    await client().call(BY_ID.list_documents, { limit: 1 });
+    assert.fail("a 429 should not resolve");
+  } catch (err) {
+    message = describeError(err);
+  }
+
+  assert.match(message, /^Rate limited \(429\)/);
+  assert.match(message, /after a short wait/);
+  assert.match(message, /do not fan out/);
 });
 
 test("a validation error keeps the field detail a model corrects itself from", async () => {
